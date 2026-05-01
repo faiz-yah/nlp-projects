@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+transformers
+torch
+sentencepiece
+accelerate
+jinja2
+python-multipart
