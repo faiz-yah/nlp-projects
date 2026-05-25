@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AgriBot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Lora:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-icon">🌾</span>
+        <div>
+          <div class="brand-name">AgriBot</div>
+          <div class="brand-sub">Agricultural Advisory</div>
+        </div>
+      </div>
+
+      <div class="section-label">MODE</div>
+      <div class="mode-group" id="modeGroup">
+        <label class="mode-card" data-mode="base">
+          <input type="radio" name="mode" value="base" />
+          <div class="mode-dot dot-base"></div>
+          <div>
+            <div class="mode-title">Out-of-box</div>
+            <div class="mode-desc">FLAN-T5 base, no training</div>
+          </div>
+        </label>
+        <label class="mode-card" data-mode="finetuned">
+          <input type="radio" name="mode" value="finetuned" />
+          <div class="mode-dot dot-finetuned"></div>
+          <div>
+            <div class="mode-title">Fine-tuned</div>
+            <div class="mode-desc">Trained on AgriQA dataset</div>
+          </div>
+        </label>
+        <label class="mode-card active" data-mode="finetuned_guard">
+          <input type="radio" name="mode" value="finetuned_guard" checked />
+          <div class="mode-dot dot-guard"></div>
+          <div>
+            <div class="mode-title">Fine-tuned + Guard</div>
+            <div class="mode-desc">With intent guardrails</div>
+          </div>
+        </label>
+        <label class="mode-card" data-mode="finetuned_rag">
+          <input type="radio" name="mode" value="finetuned_rag" />
+          <div class="mode-dot dot-rag"></div>
+          <div>
+            <div class="mode-title">Fine-tuned + RAG</div>
+            <div class="mode-desc">With knowledge retrieval</div>
+          </div>
+        </label>
+        <label class="mode-card" data-mode="finetuned_rag_guard">
+          <input type="radio" name="mode" value="finetuned_rag_guard" />
+          <div class="mode-dot dot-rag-guard"></div>
+          <div>
+            <div class="mode-title">RAG + Guard</div>
+            <div class="mode-desc">Retrieval + intent filter</div>
+          </div>
+        </label>
+      </div>
+
+      <div class="section-label" style="margin-top:2rem;">CURRENT MODE</div>
+      <div class="active-badge" id="activeBadge">
+        <span class="mode-dot dot-guard"></span>
+        Fine-tuned + Guard
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="footer-note">FLAN-T5-base · AgroQA</div>
+        <div class="footer-note">SDG 2 — Zero Hunger</div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main">
+
+      <div class="chat-header">
+        <div class="chat-title">Ask a farming question</div>
+        <button class="clear-btn" id="clearBtn" title="Clear chat">↺ Clear</button>
+      </div>
+
+      <div class="chat-window" id="chatWindow">
+        <div class="welcome">
+          <div class="welcome-icon">🌱</div>
+          <div class="welcome-text">Ask me about crops, soil, pests, irrigation, or any agricultural topic.</div>
+        </div>
+      </div>
+
+      <div class="input-bar">
+        <textarea
+          id="questionInput"
+          class="input-field"
+          placeholder="e.g. How do I control aphids on maize?"
+          rows="1"
+        ></textarea>
+        <button class="send-btn" id="sendBtn">
+          <span id="sendIcon">→</span>
+          <span class="spinner hidden" id="spinner"></span>
+        </button>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const modeCards   = document.querySelectorAll('.mode-card');
+    const activeBadge = document.getElementById('activeBadge');
+    const chatWindow  = document.getElementById('chatWindow');
+    const input       = document.getElementById('questionInput');
+    const sendBtn     = document.getElementById('sendBtn');
+    const spinner     = document.getElementById('spinner');
+    const sendIcon    = document.getElementById('sendIcon');
+    const clearBtn    = document.getElementById('clearBtn');
+
+    const modeLabels = {
+      base:                { label: 'Out-of-box',          dot: 'dot-base' },
+      finetuned:           { label: 'Fine-tuned',           dot: 'dot-finetuned' },
+      finetuned_guard:     { label: 'Fine-tuned + Guard',   dot: 'dot-guard' },
+      finetuned_rag:       { label: 'Fine-tuned + RAG',     dot: 'dot-rag' },
+      finetuned_rag_guard: { label: 'RAG + Guard',          dot: 'dot-rag-guard' },
+    };
+
+    let currentMode = 'finetuned_guard';
+
+    // Mode selection
+    modeCards.forEach(card => {
+      card.addEventListener('click', () => {
+        modeCards.forEach(c => c.classList.remove('active'));
+        card.classList.add('active');
+        currentMode = card.dataset.mode;
+        const info = modeLabels[currentMode];
+        activeBadge.innerHTML = `<span class="mode-dot ${info.dot}"></span>${info.label}`;
+      });
+    });
+
+    // Auto-resize textarea
+    input.addEventListener('input', () => {
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+    });
+
+    // Send on Enter (Shift+Enter = newline)
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+    clearBtn.addEventListener('click', clearChat);
+
+    function clearChat() {
+      chatWindow.innerHTML = `
+        <div class="welcome">
+          <div class="welcome-icon">🌱</div>
+          <div class="welcome-text">Ask me about crops, soil, pests, irrigation, or any agricultural topic.</div>
+        </div>`;
+    }
+
+    function addMessage(role, text, mode) {
+      // Remove welcome screen on first message
+      const welcome = chatWindow.querySelector('.welcome');
+      if (welcome) welcome.remove();
+
+      const wrap = document.createElement('div');
+      wrap.className = `msg-wrap ${role}`;
+
+      if (role === 'bot') {
+        const info = modeLabels[mode] || modeLabels['base'];
+        wrap.innerHTML = `
+          <div class="msg-meta"><span class="mode-dot ${info.dot}" style="width:8px;height:8px;"></span>${info.label}</div>
+          <div class="msg bubble-bot">${escapeHtml(text)}</div>`;
+      } else {
+        wrap.innerHTML = `<div class="msg bubble-user">${escapeHtml(text)}</div>`;
+      }
+
+      chatWindow.appendChild(wrap);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function addTypingIndicator() {
+      const el = document.createElement('div');
+      el.className = 'msg-wrap bot typing-wrap';
+      el.id = 'typingIndicator';
+      el.innerHTML = `<div class="msg bubble-bot typing"><span></span><span></span><span></span></div>`;
+      chatWindow.appendChild(el);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function removeTypingIndicator() {
+      const el = document.getElementById('typingIndicator');
+      if (el) el.remove();
+    }
+
+    async function sendMessage() {
+      const question = input.value.trim();
+      if (!question) return;
+
+      addMessage('user', question);
+      input.value = '';
+      input.style.height = 'auto';
+
+      // Show loading state
+      sendBtn.disabled = true;
+      sendIcon.classList.add('hidden');
+      spinner.classList.remove('hidden');
+      addTypingIndicator();
+
+      try {
+        const res = await fetch('/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question, mode: currentMode }),
+        });
+        const data = await res.json();
+        removeTypingIndicator();
+        addMessage('bot', data.answer, data.mode);
+      } catch (err) {
+        removeTypingIndicator();
+        addMessage('bot', '⚠️ Connection error. Is the server running?', currentMode);
+      } finally {
+        sendBtn.disabled = false;
+        sendIcon.classList.remove('hidden');
+        spinner.classList.add('hidden');
+      }
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>
