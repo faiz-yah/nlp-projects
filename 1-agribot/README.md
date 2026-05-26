@@ -8,3 +8,5 @@
 
 ## Demo
 <img width="800" height="411" alt="agribot-demo" src="https://github.com/user-attachments/assets/6d76163a-d068-4ece-b33b-7cb03467ebc6" />
+
+- Hosted on [HuggingFace Space](https://huggingface.co/spaces/fabienyah321/agribot)
